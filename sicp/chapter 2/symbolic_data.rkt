@@ -7,7 +7,7 @@
 ; checks top-level contents of a list, and if their identity is equal in memory
 (define (equal? l1 l2)
   (cond ((and (null? l1) (null? l2)) #t)
-      ((eq? (car l1) (car l2)) (equal? (cdr l1) (cdr l2)))
+      ((eq? (car l1) (car l2)) (equal? (cdr l1) (cdr l2))) 
       (else #f)))
 
 
