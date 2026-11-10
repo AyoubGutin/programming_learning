@@ -172,3 +172,19 @@ Apply generic is called twice, the first call dispatches to the generic magnitud
 ```
 
 Numbers are not stored with the type-tag anymore. The `type-tag` procedure works out `'scheme-number` from Scheme's primitive predicate each time it dispatches, then discards it. Tag isn't stored in data, its computed when needed + storage is now cheaper.
+
+### Exercise 2.79
+
+(define (equ? x y)
+(apply-generic 'equ? x y))
+
+(put 'equ? '(scheme-number scheme-number) =)
+
+(define (fractional-equ? x y)
+(= (_ (numer x) (denom y)) (_ (numer y) (denom x)))); would be inside the rational package, not standalone
+
+(define (complex-equ? x y)
+(and (= (real x) (real y)) (= (imag x) (imag y)))) ; would be inside complex package, not standalone
+
+(put 'equ? '(rational rational) fractional-equ?)
+(put 'equ? '(complex complex) complex-equ?)
