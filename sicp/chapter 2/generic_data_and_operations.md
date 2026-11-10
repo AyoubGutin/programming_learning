@@ -141,3 +141,34 @@ z = (complex rectangular 3.4)
 This works as the outer tag for a number is a complex, in this example. The selectors were defined for rectangular / polar types, and that tag is nested so it cannot be accessed in the current system. By installing the selectors as a complex type, it can now be accessed by the complex types and subsequently run through tearing down of tags until the right procedure can be accessed.
 
 Apply generic is called twice, the first call dispatches to the generic magnitude, the second one dispatches to rectangular package's magnitude.
+
+### Exercise 2.78
+
+```Scheme
+
+; improved version, where it handles primtiive numbers
+
+(define (attach-tag type-tag contents)
+	(if (number? contents)
+		contents
+		(cons type-tag contents)))
+
+(define (type-tag datum)
+	(cond ((pair? datum) (car datum))
+		  ((number? datum) 'scheme-number)
+		  (else
+			(error "Bad tagged datum:
+				TYPE-TAG " datum))))
+
+
+(define (contents datum)
+	(cond ((pair? datum) (cdr datum))
+		  ((number? datum) datum)
+		  (else
+			(error "Bad tagged datum:
+				CONTENTS" datum))))
+
+
+```
+
+Numbers are not stored with the type-tag anymore. The `type-tag` procedure works out `'scheme-number` from Scheme's primitive predicate each time it dispatches, then discards it. Tag isn't stored in data, its computed when needed + storage is now cheaper.
