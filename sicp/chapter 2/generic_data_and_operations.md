@@ -188,3 +188,153 @@ Numbers are not stored with the type-tag anymore. The `type-tag` procedure works
 
 (put 'equ? '(rational rational) fractional-equ?)
 (put 'equ? '(complex complex) complex-equ?)
+
+### Exercise 2.81
+
+1.  What happens when procedures are put in the coercion table to coerce arguments of each type to their own type, and an operation isn't found.
+
+```Scheme
+(apply-generic 'missing-operation x y) ; x, y are two scheme-numbers
+
+type-tags = (scheme-number scheme-number)
+proc = #f
+
+type1 = scheme-number
+type2 = scheme-number
+a1 = x
+a2 = y
+
+t1->t2 = (get-coercion scheme-number scheme-number) = scheme-number->scheme-number
+
+t2->t1 = (get-coercion scheme-number scheme-number) = scheme-number->scheme-number
+
+(apply-generic 'missing-operation (t1->t2 a1) a2)
+
+...
+
+; recursion ends up happening, as there will always be a 'raise' procedure, with no operation being found as it isnt being installed in the first place.
+```
+
+recursion ends up happening, as there will always be a 'raise' procedure, with no operation being found as it isn't being installed in the first place.
+
+```Scheme
+(define (exp x y)
+	(apply-generic 'exp x y))
+
+(put 'exp '(scheme-number scheme-number)
+	(lambda (x y)
+		(tag (expt x y))))
+```
+
+What will happen in the above snippet , when called with two complex numbers:
+
+`apply-generic` will extract the type tags, which are all `complex`, and extract the required procedure, which it will not find as it would have only been defined for `scheme-number`.
+So, it will attempt to find coercions for where the `type1` can be coerced into `type2`, which in this case is just the identity, so `complex->complex`. It will then do a recursive call, with the new object for the first argument, which in actuality is just the same value and representation. This will lead to another infinite loop, and will never reach the intended operation.
+
+2.  Tracing `apply-generic` as is:
+
+```Scheme
+(exp x y)
+(apply-generic 'exp x y)
+
+type-tags = (complex complex)
+proc = #f
+
+type1 = complex
+type2 = complex
+a1 = x
+a2 = y
+
+t1->t2 = #f
+t2->t1 = #f
+
+error "No method for these types"
+```
+
+So, the program fails and gives an error, where there is no method for these types, which is right. However, there is no need to attempt to find the coercions of the same types, as the initial fact that the procedure was not found with arguments of the same type should be an indicator that the function has to stop.
+
+3.
+
+```Scheme
+; modified apply-generic
+(define (apply-generic op . args)
+  (let ((type-tags (map type-tag args)))
+    (let ((proc (get op type-tags))
+		 (type1 (car type-tags))
+		 (type2 (cadr type-tags)))
+      (if proc
+          (apply proc (map contents args))
+          (if (and (= (length args) 2) (not (eq type1 type2)))
+              (let  ((a1 (car args))
+                    (a2 (cadr args)))
+                (let ((t1->t2
+                       (get-coercion type1
+                                     type2))
+                      (t2->t1
+                       (get-coercion type2
+                                     type1)))
+                  (cond (t1->t2
+                         (apply-generic
+                          op (t1->t2 a1) a2))
+                        (t2->t1
+                         (apply-generic
+                          op a1 (t2->t1 a2)))
+                        (else
+                         (error
+                          "No method for
+                           these types"
+                          (list
+                           op
+                           type-tags))))))
+              (error
+               "No method for these types"
+               (list op type-tags)))))))
+
+```
+
+### Exericse 2.82
+
+Goal is to generalise `apply-generic`, so that it can handle multiple arguments.
+
+One strategy is to coerce all arguments to type of the first argument, find a relevant operation. If not found, try second. And so on.
+
+```Scheme
+(define (list-n element n)
+  (if (= n 0) nil
+      (cons element (list-n element (- n 1)))))
+
+
+(define (coerce-one arg t)
+  (let ((t-arg (type-tag arg)))
+    (let ((coerce-proc (get-coercion t-arg t)))
+      (if (eq? t-arg t)
+        arg
+        (if coerce-proc
+            (coerce-proc arg)
+            #f)))))
+
+
+
+(define (apply-generic op . args)
+  (let ((type-tags (map type-tag args)))
+        (define (try-coercion tags)
+          (if (null? tags)
+              (error "No method for the types" (list op type-tags))
+              (let ((t (car tags)))
+                (let ((coerced (map (lambda (x) (coerce-one x t)) args))
+                      (proc (get op (list-n t (length args)))))
+                  (if (and (not (memq #f coerced)) proc)
+                      (apply proc (map contents coerced))
+                      (try-coercion (cdr tags)))))))
+        (let ((proc (get op type-tags)))
+          (if proc
+              (apply proc (map contents args))
+              (try-coercion type-tags)))))
+
+
+```
+
+However, if we call `apply-generic` with `n3 n1`, and the only valid operation for `op` is `(op (n1 n3)`. It will first attempt to look at the index `(op (n3 n1)`. It will not find it. Then, it will do `(op (n3 n3))`. It will not find it. Then, it will do `(op (n1 n1))`, provided it has a way of remembering the second argument's original type. It will not find it.
+
+Therefore, every key, apart from the original, it builds is of a single type. So, a method keyed on mixed types can never be found.
+Furthermore, it cannot look for different types not found in the original call, for example, if called on` (scheme-number rational)`, it cannot ever be a `complex` type
