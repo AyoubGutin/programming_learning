@@ -338,3 +338,82 @@ However, if we call `apply-generic` with `n3 n1`, and the only valid operation f
 
 Therefore, every key, apart from the original, it builds is of a single type. So, a method keyed on mixed types can never be found.
 Furthermore, it cannot look for different types not found in the original call, for example, if called on` (scheme-number rational)`, it cannot ever be a `complex` type
+
+### Exercise 2.83
+
+```Scheme
+(define (raise datum)
+  (apply-generic 'raise datum))
+
+(define (integer->rational datum)
+  (make-rational datum 1))
+(put 'raise '(integer) integer->rational) ; lives inside integer package
+
+(define (rational->real datum)
+  (make-real (/ (numer datum) (denom datum))))
+(put 'raise '(rational) rational->real) ; lives inside rational package
+
+(define (real->complex datum)
+  (make-complex-from-real-imag datum 0))
+(put 'raise '(real) real->complex) ; lives inside real package
+```
+
+### Exercise 2.84
+
+```Scheme
+;1. abstract approach. assume we have a way of getting a types 'level' in the tower.
+; this knows whether one type is above another instantly, but its an extra table/variable to update when a type is added
+
+(define (is-type-higher arg-type t)
+  (> (- (tower-level t) (tower-level arg-type)) 0)) ; tower level would handle non existent types. abstracted
+
+
+(define (successive-raise arg t)
+  (let ((arg-type (type-tag arg)))
+    (cond ((eq? arg-type t) arg) ; base-case: is the argument type the target
+          ((is-type-higher arg-type t) (successive-raise (raise arg) t)) ; if target type is higher, raise once.
+          (else #f)))) ; otherwise, it is lower, or there cannot be any more raises.
+
+
+(define (apply-generic op . args)
+  (let ((type-tags (map type-tag args)))
+        (define (try-coercion tags)
+          (if (null? tags)
+              (error "No method for the types" (list op type-tags))
+              (let ((t (car tags)))
+                (let ((coerced (map (lambda (x) (successive-raise x t)) args))
+                      (proc (get op (list-n t (length args)))))
+                  (if (and (not (memq #f coerced)) proc)
+                      (apply proc (map contents coerced))
+                      (try-coercion (cdr tags)))))))
+        (let ((proc (get op type-tags)))
+          (if proc
+              (apply proc (map contents args))
+              (try-coercion type-tags)))))
+
+
+; 2. less abstract, we do it in one pass, but relies on raising first, so it can potentially do more 'useless' work.
+
+(define (successive-raise-2 arg t)
+  (let ((arg-type (type-tag arg)))
+    (let ((proc (get 'raise (list arg-type))))
+      (cond ((eq? arg-type t) arg) ; base-case: is the argument type the target
+            (proc (successive-raise-2 (raise arg) t))
+            (else #f))))) ; otherwise, it is lower, or there cannot be any more raises.
+
+(define (apply-generic op . args)
+  (let ((type-tags (map type-tag args)))
+        (define (try-coercion tags)
+          (if (null? tags)
+              (error "No method for the types" (list op type-tags))
+              (let ((t (car tags)))
+                (let ((coerced (map (lambda (x) (successive-raise-2 x t)) args))
+                      (proc (get op (list-n t (length args)))))
+                  (if (and (not (memq #f coerced)) proc)
+                      (apply proc (map contents coerced))
+                      (try-coercion (cdr tags)))))))
+        (let ((proc (get op type-tags)))
+          (if proc
+              (apply proc (map contents args))
+              (try-coercion type-tags)))))
+```
